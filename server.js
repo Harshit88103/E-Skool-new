@@ -21,9 +21,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-// CORS
+// CORS - handle both development and production
 app.use(cors({
-  origin: [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`],
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://e-skool.onrender.com'] 
+    : [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`],
   credentials: true
 }));
 
@@ -31,6 +33,11 @@ app.use(cors({
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
+});
+
+// Root route - BEFORE static files (so it takes priority)
+app.get('/', (req, res) => {
+  res.redirect('/signup.html');
 });
 
 // Serve static files
@@ -41,7 +48,12 @@ app.use('/api', authRoutes);
 
 // Test route
 app.get('/api/ping', (req, res) => {
-  res.json({ ok: true, message: 'Server is running', timestamp: new Date().toISOString() });
+  res.json({ 
+    ok: true, 
+    message: 'Server is running', 
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development'
+  });
 });
 
 // 404 handler for API routes
@@ -54,16 +66,24 @@ app.use('/api/*', (req, res) => {
 app.use((err, req, res, next) => {
   console.error('[GLOBAL ERROR]', err);
   if (res.headersSent) return next(err);
-  res.status(500).json({ ok: false, message: 'Internal server error', error: err.message });
+  res.status(500).json({ 
+    ok: false, 
+    message: 'Internal server error', 
+    error: process.env.NODE_ENV === 'production' ? undefined : err.message 
+  });
 });
 
 // Start server
 connectDB().then(() => {
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     const actualPort = server.address().port;
     console.log(`✓ MongoDB connected`);
-    console.log(`✓ Server listening on: http://localhost:${actualPort}`);
-    console.log(`✓ Open: http://localhost:${actualPort}/signup.html`);
+    console.log(`✓ Server listening on port ${actualPort}`);
+    console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`✓ Open: http://localhost:${actualPort}/`);
+    }
   });
 }).catch(err => {
   console.error('✗ Failed to start server:', err);
